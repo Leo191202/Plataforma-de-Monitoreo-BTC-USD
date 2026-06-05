@@ -27,7 +27,7 @@ Si deseas correr este proyecto en tu entorno local, sigue estos pasos:
 
 1. Clona este repositorio:
    
-   git clone [https://github.com/TU-USUARIO/nombre-de-tu-repo.git](https://github.com/TU-USUARIO/nombre-de-tu-repo.git)
+   git clone https://github.com/Leo191202/Plataforma-de-Monitoreo-BTC-USD.git
 
 2.Instala las dependecias:
    
