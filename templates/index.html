@@ -2,10 +2,10 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Motor de Análisis BTC</title>
+    <title>Motor de Análisis BTC | Trading Dashboard</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        /* Paleta de colores Dark Mode profesional */
+        /* --- Configuración de Variables Globales (Dark Mode) --- */
         :root {
             --bg-base: #131722;
             --bg-panel: #1E222D;
@@ -23,13 +23,14 @@
             padding: 30px 15px; 
         }
 
+        /* --- Estructura de Diseño (Layout) --- */
         .contenedor { 
             width: 95%; 
             max-width: 1200px; 
             margin: auto; 
             display: flex;
             flex-direction: column;
-            gap: 25px; /* Espacio entre paneles */
+            gap: 25px;
         }
 
         .encabezado {
@@ -51,6 +52,7 @@
             font-size: 14px;
         }
 
+        /* --- Paneles de Gráficas --- */
         .panel-grafica { 
             background-color: var(--bg-panel); 
             padding: 20px; 
@@ -74,6 +76,7 @@
             color: var(--texto-principal);
             font-weight: 600;
         }
+
         .titulo-y-precio {
             display: flex;
             align-items: baseline; 
@@ -87,15 +90,15 @@
             letter-spacing: 0.5px;
         }
 
+        /* --- Indicadores de Estado de Conexión --- */
         .estado-conexion {
             font-size: 12px;
-            color: #00e676; /* Verde encendido */
+            color: #00e676; 
             display: flex;
             align-items: center;
             gap: 5px;
         }
 
-        /* Punto parpadeante para simular conexión "En vivo" */
         .punto-vivo {
             width: 8px;
             height: 8px;
@@ -140,133 +143,134 @@
     </div>
 
     <script>
+        /* --- Configuración Global de Chart.js --- */
+        Chart.defaults.color = '#8A919E'; 
+        Chart.defaults.borderColor = '#2A2E39'; 
+        Chart.defaults.font.family = "'Segoe UI', Roboto, sans-serif";
 
-Chart.defaults.color = '#8A919E'; 
-Chart.defaults.borderColor = '#2A2E39'; 
-Chart.defaults.font.family = "'Segoe UI', Roboto, sans-serif";
-
-// Variable para no repetir la alarma en el mismo punto de tiempo
+        /* --- Estado de Aplicación --- */
+        let miGraficaPrecio; 
+        let miGraficaMACD;
         let ultimaHoraAlerta = null;
 
-        // Generador de frecuencias de sonido (Beep)
+        /* --- Controlador de Alertas de Audio (Web Audio API) --- */
         function reproducirBeep(tipo) {
             const contextoAudio = new (window.AudioContext || window.webkitAudioContext)();
             const oscilador = contextoAudio.createOscillator();
             const controlVolumen = contextoAudio.createGain();
 
             if (tipo === "COMPRA") {
-                oscilador.type = 'sine'; // Onda suave
-                oscilador.frequency.setValueAtTime(800, contextoAudio.currentTime); // Tono agudo y alegre
+                oscilador.type = 'sine'; // Frecuencia suave para señales alcistas
+                oscilador.frequency.setValueAtTime(800, contextoAudio.currentTime);
             } else if (tipo === "VENTA") {
-                oscilador.type = 'sawtooth'; // Onda más rasposa
-                oscilador.frequency.setValueAtTime(300, contextoAudio.currentTime); // Tono grave de alerta
+                oscilador.type = 'sawtooth'; // Frecuencia de alerta para señales bajistas
+                oscilador.frequency.setValueAtTime(300, contextoAudio.currentTime);
             }
 
-            controlVolumen.gain.setValueAtTime(0.1, contextoAudio.currentTime); // Volumen al 10%
+            controlVolumen.gain.setValueAtTime(0.1, contextoAudio.currentTime);
             oscilador.connect(controlVolumen);
             controlVolumen.connect(contextoAudio.destination);
             oscilador.start();
-            oscilador.stop(contextoAudio.currentTime + 1); // Dura un segundo
+            oscilador.stop(contextoAudio.currentTime + 1);
         }
-let miGraficaPrecio; 
-let miGraficaMACD;
 
-function actualizarGrafica() {
-    fetch('/api/precios')
-        .then(respuesta => respuesta.json())
-        .then(datos => {
-            const etiquetas = datos.map(item => item.hora);
-            
-            const precios = datos.map(item => item.precio);
-            const smaLenta = datos.map(item => item.sma_15); 
-            const emaRapida = datos.map(item => item.ema_5);
-            
-            const macdLinea = datos.map(item => item.macd);
-            const signalLinea = datos.map(item => item.signal);
-            const histograma = datos.map(item => item.histograma);
+        /* --- Controlador Principal de Actualización de Datos --- */
+        function actualizarGrafica() {
+            fetch('/api/precios')
+                .then(respuesta => respuesta.json())
+                .then(datos => {
+                    // 1. Extracción de vectores de datos
+                    const etiquetas = datos.map(item => item.hora);
+                    const precios = datos.map(item => item.precio);
+                    const smaLenta = datos.map(item => item.sma_15); 
+                    const emaRapida = datos.map(item => item.ema_5);
+                    const macdLinea = datos.map(item => item.macd);
+                    const signalLinea = datos.map(item => item.signal);
+                    const histograma = datos.map(item => item.histograma);
 
-            // Tomamos el último precio de la lista
-            const ultimoPrecio = precios[precios.length - 1];
-            // Lo formateamos con separadores de miles y 2 decimales, y lo inyectamos en el HTML
-            document.getElementById('precioActual').innerText = `$${ultimoPrecio.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-            const ultimoDato = datos[datos.length - 1];
-            
-            if ((ultimoDato.senal === "COMPRA" || ultimoDato.senal === "VENTA") && ultimoDato.hora !== ultimaHoraAlerta) {
-                reproducirBeep(ultimoDato.senal);
-                ultimaHoraAlerta = ultimoDato.hora; // Registramos la hora para que no suene doble
-            }
-            const coloresPuntos = datos.map(item => {
-                if (item.senal === "COMPRA") return "#00e676"; 
-                if (item.senal === "VENTA") return "#ff1744"; 
-                return "transparent";
-            });
-            
-            const tamanoPuntos = datos.map(item => {
-                if (item.senal === "COMPRA" || item.senal === "VENTA") return 6; 
-                return 0; 
-            });
+                    // 2. Actualización del Ticker de Precio
+                    const ultimoPrecio = precios[precios.length - 1];
+                    document.getElementById('precioActual').innerText = `$${ultimoPrecio.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                    
+                    // 3. Evaluación de señales para Alertas de Audio
+                    const ultimoDato = datos[datos.length - 1];
+                    if ((ultimoDato.senal === "COMPRA" || ultimoDato.senal === "VENTA") && ultimoDato.hora !== ultimaHoraAlerta) {
+                        reproducirBeep(ultimoDato.senal);
+                        ultimaHoraAlerta = ultimoDato.hora;
+                    }
 
-            const coloresHistograma = histograma.map(valor => 
-                valor >= 0 ? 'rgba(0, 230, 118, 0.4)' : 'rgba(255, 23, 68, 0.4)'
-            );
+                    // 4. Configuración de marcadores visuales (Señales de Trading)
+                    const coloresPuntos = datos.map(item => {
+                        if (item.senal === "COMPRA") return "#00e676"; 
+                        if (item.senal === "VENTA") return "#ff1744"; 
+                        return "transparent";
+                    });
+                    
+                    const tamanoPuntos = datos.map(item => {
+                        if (item.senal === "COMPRA" || item.senal === "VENTA") return 6; 
+                        return 0; 
+                    });
 
-            const ctxPrecio = document.getElementById('graficaBitcoin').getContext('2d');
-            const ctxMACD = document.getElementById('graficaMACD').getContext('2d');
+                    const coloresHistograma = histograma.map(valor => 
+                        valor >= 0 ? 'rgba(0, 230, 118, 0.4)' : 'rgba(255, 23, 68, 0.4)'
+                    );
 
-            // --- LÓGICA DE ACTUALIZACIÓN: GRÁFICA PRECIO ---
-            if (!miGraficaPrecio) {
-                // Si no existe, la creamos por primera vez
-                miGraficaPrecio = new Chart(ctxPrecio, {
-                    type: 'line',
-                    data: {
-                        labels: etiquetas,
-                        datasets: [
-                            { label: 'Precio Real ($)', data: precios, borderColor: '#F5A623', backgroundColor: 'rgba(245, 166, 35, 0.1)', fill: true, pointBackgroundColor: coloresPuntos, pointRadius: tamanoPuntos, pointBorderColor: coloresPuntos, borderWidth: 2 },
-                            { label: 'SMA (Lenta 15)', data: smaLenta, borderColor: '#2962FF', borderDash: [5, 5], pointRadius: 0, borderWidth: 1.5 },
-                            { label: 'EMA (Rápida 5)', data: emaRapida, borderColor: '#E040FB', pointRadius: 0, borderWidth: 1.5 }
-                        ]
-                    },
-                    options: { animation: false, interaction: { mode: 'index', intersect: false }, plugins: { legend: { labels: { usePointStyle: true } } } } 
+                    const ctxPrecio = document.getElementById('graficaBitcoin').getContext('2d');
+                    const ctxMACD = document.getElementById('graficaMACD').getContext('2d');
+
+                    /* --- Renderizado o Actualización: Gráfica de Precio --- */
+                    if (!miGraficaPrecio) {
+                        miGraficaPrecio = new Chart(ctxPrecio, {
+                            type: 'line',
+                            data: {
+                                labels: etiquetas,
+                                datasets: [
+                                    { label: 'Precio Real ($)', data: precios, borderColor: '#F5A623', backgroundColor: 'rgba(245, 166, 35, 0.1)', fill: true, pointBackgroundColor: coloresPuntos, pointRadius: tamanoPuntos, pointBorderColor: coloresPuntos, borderWidth: 2 },
+                                    { label: 'SMA (Lenta 15)', data: smaLenta, borderColor: '#2962FF', borderDash: [5, 5], pointRadius: 0, borderWidth: 1.5 },
+                                    { label: 'EMA (Rápida 5)', data: emaRapida, borderColor: '#E040FB', pointRadius: 0, borderWidth: 1.5 }
+                                ]
+                            },
+                            options: { animation: false, interaction: { mode: 'index', intersect: false }, plugins: { legend: { labels: { usePointStyle: true } } } } 
+                        });
+                    } else {
+                        miGraficaPrecio.data.labels = etiquetas;
+                        miGraficaPrecio.data.datasets[0].data = precios;
+                        miGraficaPrecio.data.datasets[0].pointBackgroundColor = coloresPuntos;
+                        miGraficaPrecio.data.datasets[0].pointBorderColor = coloresPuntos;
+                        miGraficaPrecio.data.datasets[0].pointRadius = tamanoPuntos;
+                        miGraficaPrecio.data.datasets[1].data = smaLenta;
+                        miGraficaPrecio.data.datasets[2].data = emaRapida;
+                        miGraficaPrecio.update('none'); 
+                    }
+
+                    /* --- Renderizado o Actualización: Gráfica de MACD --- */
+                    if (!miGraficaMACD) {
+                        miGraficaMACD = new Chart(ctxMACD, {
+                            type: 'bar',
+                            data: {
+                                labels: etiquetas,
+                                datasets: [
+                                    { type: 'line', label: 'MACD', data: macdLinea, borderColor: '#2962FF', borderWidth: 1.5, pointRadius: 0 },
+                                    { type: 'line', label: 'Señal', data: signalLinea, borderColor: '#FF6D00', borderWidth: 1.5, pointRadius: 0 },
+                                    { type: 'bar', label: 'Histograma', data: histograma, backgroundColor: coloresHistograma }
+                                ]
+                            },
+                            options: { animation: false, interaction: { mode: 'index', intersect: false }, scales: { x: { display: false } }, plugins: { legend: { labels: { usePointStyle: true } } } } 
+                        });
+                    } else {
+                        miGraficaMACD.data.labels = etiquetas;
+                        miGraficaMACD.data.datasets[0].data = macdLinea;
+                        miGraficaMACD.data.datasets[1].data = signalLinea;
+                        miGraficaMACD.data.datasets[2].data = histograma;
+                        miGraficaMACD.data.datasets[2].backgroundColor = coloresHistograma;
+                        miGraficaMACD.update('none');
+                    }
                 });
-            } else {
-                // Si ya existe, SOLO actualizamos los datos inyectándolos
-                miGraficaPrecio.data.labels = etiquetas;
-                miGraficaPrecio.data.datasets[0].data = precios;
-                miGraficaPrecio.data.datasets[0].pointBackgroundColor = coloresPuntos;
-                miGraficaPrecio.data.datasets[0].pointBorderColor = coloresPuntos;
-                miGraficaPrecio.data.datasets[0].pointRadius = tamanoPuntos;
-                miGraficaPrecio.data.datasets[1].data = smaLenta;
-                miGraficaPrecio.data.datasets[2].data = emaRapida;
-                miGraficaPrecio.update('none'); // 'none' evita animaciones molestas al recargar
-            }
+        }
 
-            // --- LÓGICA DE ACTUALIZACIÓN: GRÁFICA MACD ---
-            if (!miGraficaMACD) {
-                miGraficaMACD = new Chart(ctxMACD, {
-                    type: 'bar',
-                    data: {
-                        labels: etiquetas,
-                        datasets: [
-                            { type: 'line', label: 'MACD', data: macdLinea, borderColor: '#2962FF', borderWidth: 1.5, pointRadius: 0 },
-                            { type: 'line', label: 'Señal', data: signalLinea, borderColor: '#FF6D00', borderWidth: 1.5, pointRadius: 0 },
-                            { type: 'bar', label: 'Histograma', data: histograma, backgroundColor: coloresHistograma }
-                        ]
-                    },
-                    options: { animation: false, interaction: { mode: 'index', intersect: false }, scales: { x: { display: false } }, plugins: { legend: { labels: { usePointStyle: true } } } } 
-                });
-            } else {
-                miGraficaMACD.data.labels = etiquetas;
-                miGraficaMACD.data.datasets[0].data = macdLinea;
-                miGraficaMACD.data.datasets[1].data = signalLinea;
-                miGraficaMACD.data.datasets[2].data = histograma;
-                miGraficaMACD.data.datasets[2].backgroundColor = coloresHistograma;
-                miGraficaMACD.update('none');
-            }
-        });
-}
-
-actualizarGrafica();
-setInterval(actualizarGrafica, 60000);
+        // Inicialización de la rutina de actualización asíncrona
+        actualizarGrafica();
+        setInterval(actualizarGrafica, 60000);
     </script>
 </body>
 </html>
